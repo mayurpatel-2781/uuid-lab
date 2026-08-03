@@ -3,22 +3,10 @@
 
 /**
  * uuid-lab CLI — npx uuid-lab <command> [options]
- *
- * Usage:
- *   npx uuid-lab generate nanoid --count 5
- *   npx uuid-lab generate uuid
- *   npx uuid-lab generate meaningful --count 3
- *   npx uuid-lab decode 01ARZ3NDEKTSV4RRFFQ69G5FAV
- *   npx uuid-lab scan "user_john@example.com_abc"
- *   npx uuid-lab entropy V1StGXR8_Z5jdHi6B-myT
- *   npx uuid-lab inspect <id>
- *   npx uuid-lab compress <uuid>
- *   npx uuid-lab predict --size 21 --count 1000000
- *   npx uuid-lab formats
- *   npx uuid-lab help
  */
 
 const uid = require('../index.js');
+const pkg = require('../package.json');
 
 const argv   = process.argv.slice(2);
 const command = argv[0];
@@ -38,14 +26,29 @@ for (let i = 1; i < argv.length; i++) {
 const count = flags.count || flags.n || 1;
 
 function output(data) {
-  if (Array.isArray(data)) data.forEach(d => console.log(d));
-  else if (typeof data === 'object') console.log(JSON.stringify(data, null, 2));
-  else console.log(data);
+  if (flags.json) {
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+  if (Array.isArray(data)) {
+    data.forEach(d => console.log(d));
+  } else if (typeof data === 'object') {
+    console.log(JSON.stringify(data, null, 2));
+  } else {
+    console.log(data);
+  }
 }
 
 const GENERATORS = {
-  nanoid:       () => uid.nanoId(flags.size),
+  nanoid:       () => uid.nanoId({ size: flags.size }),
   uuid:         () => uid.uuid(),
+  uuidV1:       () => uid.uuidV1 ? uid.uuidV1() : 'v1 not implemented',
+  uuidV3:       () => uid.uuidV3({ name: flags.name || 'test' }),
+  uuidV4:       () => uid.uuidV4(),
+  uuidV5:       () => uid.uuidV5({ name: flags.name || 'test' }),
+  uuidV6:       () => uid.uuidV6(),
+  uuidV7:       () => uid.uuidV7(),
+  uuidV8:       () => uid.uuidV8(),
   ulid:         () => uid.ulid(),
   ksuid:        () => uid.ksuid(),
   snowflake:    () => uid.snowflakeId(),
@@ -63,10 +66,6 @@ const GENERATORS = {
   typed:        () => uid.typedId(flags.type || flags.t || 'item'),
   adaptive:     () => uid.adaptiveId(flags.usecase || flags.u || 'session'),
   prefixed:     () => uid.prefixedId({ prefix: flags.prefix || flags.p || 'id', size: flags.size || 12 }),
-  base62:       () => uid.base62Id({ size: flags.size || 16 }),
-  base36:       () => uid.base36Id({ size: flags.size || 16 }),
-  urlsafe:      () => uid.urlSafeId({ size: flags.size || 21 }),
-  expiring:     () => uid.expiringId({ ttl: flags.ttl || '1h' }),
 };
 
 switch (command) {
@@ -79,7 +78,7 @@ switch (command) {
       console.error(`Unknown type: "${type}"\nAvailable: ${Object.keys(GENERATORS).join(', ')}`);
       process.exit(1);
     }
-    const ids = Array.from({ length: Math.min(count, 10000) }, () => gen());
+    const ids = Array.from({ length: Math.min(count, 100000) }, () => gen());
     output(ids.length === 1 ? ids[0] : ids);
     break;
   }
@@ -92,6 +91,13 @@ switch (command) {
     break;
   }
 
+  case 'validate': {
+    const id = args[0];
+    if (!id) { console.error('Usage: uuid-lab validate <id>'); process.exit(1); }
+    output(uid.parseId(id));
+    break;
+  }
+
   case 'inspect':
   case 'info': {
     const id = args[0];
@@ -100,8 +106,14 @@ switch (command) {
     break;
   }
 
-  case 'scan':
-  case 'pii': {
+  case 'benchmark':
+  case 'bench': {
+    console.log('Running production benchmark suite...');
+    require('../benchmark.js');
+    break;
+  }
+
+  case 'scan': {
     const id = args[0];
     if (!id) { console.error('Usage: uuid-lab scan <id>'); process.exit(1); }
     const result = uid.scanForPII(id);
@@ -127,22 +139,6 @@ switch (command) {
     break;
   }
 
-  case 'predict': {
-    output(uid.predictCollision({
-      alphabetSize: flags.alphabet || 62,
-      idLength:     flags.size || 21,
-      count:        flags.count || 1000000,
-    }));
-    break;
-  }
-
-  case 'validate': {
-    const id = args[0];
-    if (!id) { console.error('Usage: uuid-lab validate <id>'); process.exit(1); }
-    output(uid.parseId(id));
-    break;
-  }
-
   case 'formats': {
     console.log('Available types:');
     Object.keys(GENERATORS).forEach(t => console.log(`  ${t}`));
@@ -152,7 +148,6 @@ switch (command) {
   case 'version':
   case '-v':
   case '--version': {
-    const pkg = require('../../package.json');
     console.log(`uuid-lab v${pkg.version}`);
     break;
   }
@@ -162,7 +157,7 @@ switch (command) {
   case '-h':
   default: {
     console.log(`
-uuid-lab — The world's most complete ID toolkit
+uuid-lab — Production-grade ID toolkit v${pkg.version}
 
 Usage:
   uuid-lab <command> [options]
@@ -170,20 +165,19 @@ Usage:
 Commands:
   generate <type>     Generate IDs (alias: gen, g)
   decode <id>         Decode any ID type
-  inspect <id>        Full ID inspection
-  scan <id>           PII scanner
+  validate <id>       Validate & detect type
+  inspect <id>        Full ID inspection (with metadata)
+  benchmark           Run performance benchmarks
+  scan <id>           PII/Security scanner
   entropy <id>        Entropy analysis
   compress <id>       Compress UUID to Base62
-  predict             Collision probability
-  validate <id>       Validate & detect type
   formats             List all generator types
   version             Show version
 
 Generate types:
   nanoid, uuid, ulid, ksuid, snowflake, human, meaningful,
   pronounceable, fuzzy, emoji, short, visual, timestamp,
-  compact, offline, otp, typed, adaptive, prefixed,
-  base62, base36, urlsafe, expiring
+  compact, offline, otp, typed, adaptive, prefixed
 
 Options:
   --count <n>         Number of IDs to generate
@@ -197,13 +191,10 @@ Options:
 
 Examples:
   uuid-lab generate nanoid --count 5
-  uuid-lab generate meaningful --count 3
-  uuid-lab generate typed --type order
+  uuid-lab benchmark
   uuid-lab decode 01ARZ3NDEKTSV4RRFFQ69G5FAV
-  uuid-lab scan "user_john@test.com"
-  uuid-lab compress 550e8400-e29b-41d4-a716-446655440000
-  uuid-lab predict --size 16 --count 1000000
 `);
     break;
   }
 }
+

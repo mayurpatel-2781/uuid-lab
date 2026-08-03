@@ -5,15 +5,19 @@
   "main": "index.js",
   "types": "index.d.ts",
   "bin": {
-    "uuid-lab": "./bin/uuid-lab.js"
+    "uuid-lab": "./bin/uuid-lab.js",
+    "uuid": "./bin/uuid-lab.js"
   },
   "exports": {
-    ".":        "./index.js",
-    "./react":  "./react/hooks.js",
-    "./vue":    "./vue/composables.js",
-    "./server": "./server.js",
+    ".":            "./index.js",
+    "./generators": "./generators.js",
     "./validation": "./validation.js",
-    "./compat": "./compat.js"
+    "./advanced":   "./advanced.js",
+    "./enterprise": "./enterprise.js",
+    "./react":      "./react/hooks.js",
+    "./vue":        "./vue/composables.js",
+    "./server":     "./server.js",
+    "./compat":     "./compat.js"
   },
   "files": [
     "index.js",

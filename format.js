@@ -54,9 +54,9 @@ function decodeBase36(str) {
 
 // ── ID generators ─────────────────────────────────────────────────────────────
 
-function prefixedId(prefix, opts = {}) {
+function prefixedId(opts = {}) {
+  const { prefix = 'id', size = 16, separator = '_' } = typeof opts === 'string' ? { prefix: opts } : opts;
   if (!prefix || typeof prefix !== 'string') throw new TypeError('prefix must be a non-empty string');
-  const { size = 16, separator = '_' } = opts;
   return `${prefix}${separator}${nanoId({ size })}`;
 }
 

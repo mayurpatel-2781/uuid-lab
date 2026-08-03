@@ -53,19 +53,22 @@ export interface CollisionPrediction {
 // ── UUID ──────────────────────────────────────────────────────────────────────
 
 export function uuid(): string;
+export function uuidV1(): string;
 export function uuidV4(): string;
-export function uuidV7(): string;
-export function uuidV5(name: string): string;
-export function uuidV3(name: string): string;
+export function uuidV6(): string;
+export function uuidV7(opts?: { timestamp?: number }): string;
+export function uuidV8(customBytes?: number[] | Uint8Array): string;
+export function uuidV5(opts?: { name: string; namespace?: string } | string): string;
+export function uuidV3(opts?: { name: string; namespace?: string } | string): string;
 export const UUID_NAMESPACES: Record<string, string>;
 
 // ── Sortable / Time ───────────────────────────────────────────────────────────
 
-export function ulid(): string;
+export function ulid(opts?: { timestamp?: number }): string;
 export function ulidToTimestamp(id: string): number;
-export function ksuid(): string;
+export function ksuid(opts?: { timestamp?: number }): string;
 export function ksuidToDate(id: string): Date;
-export function snowflakeId(): string;
+export function snowflakeId(opts?: { timestamp?: number; epoch?: number; workerId?: number; sequence?: number }): string;
 export function parseSnowflake(id: string): { timestamp: number; date: Date };
 
 // ── Core Generators ───────────────────────────────────────────────────────────
@@ -78,6 +81,11 @@ export function humanId(opts?: { separator?: string; words?: number; withNumber?
 export function sequentialId(opts?: { pad?: number; prefix?: string }): string;
 export function resetSequence(n?: number): void;
 export function getSequence(): number;
+export function formatReport(report: ComplianceReport): string;
+export function verifySOC2(uidInstance: any): { compliant: boolean; checks: any[]; verdict: string };
+
+export const TEMPLATE_MARKETPLACE: Record<string, Record<string, string>>;
+
 export function fromPattern(pattern: string): string;
 
 export const ALPHA_BASE64URL: string;

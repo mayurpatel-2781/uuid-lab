@@ -14,10 +14,13 @@ const crypto = require('crypto');
 // ── Core Generators ───────────────────────────────────────────────────────────
 const gen = require('./generators');
 const {
-  nanoId, typedId, registerTypes, TYPE_REGISTRY, humanId,
+  nanoId, uuid, uuidV1, uuidV4, uuidV6, uuidV7, uuidV8, uuidV5, uuidV3, ulid, ksuid, snowflakeId,
+  typedId, registerTypes, TYPE_REGISTRY, humanId,
   sequentialId, resetSequence, getSequence, fromPattern,
   ALPHA_BASE64URL, ALPHA_BASE62, ALPHA_BASE36, ALPHA_HEX,
 } = gen;
+
+// ... (skipping some imports for brevity in targetContent but I'll use full replacement for the section)
 
 // ── Domain Modules ────────────────────────────────────────────────────────────
 const semantic_mod  = require('./semantic');
@@ -65,62 +68,15 @@ const nextgen_mod    = require('./nextgen');
 const bleeding_mod   = require('./bleeding_edge');
 
 // ══════════════════════════════════════════════════════════════════════════════
-// UUID Helpers
+// UUID & Sortable Helpers (imported from generators.js)
 // ══════════════════════════════════════════════════════════════════════════════
 
-function uuid()   { return crypto.randomUUID ? crypto.randomUUID() : uuidV4(); }
-function uuidV4() {
-  const b = crypto.randomBytes(16);
-  b[6] = (b[6] & 0x0f) | 0x40;
-  b[8] = (b[8] & 0x3f) | 0x80;
-  const h = b.toString('hex');
-  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
-}
-function uuidV7() {
-  const b  = crypto.randomBytes(16);
-  const ms = Date.now();
-  b[0] = (ms / 2**40) & 0xff; b[1] = (ms / 2**32) & 0xff;
-  b[2] = (ms / 2**24) & 0xff; b[3] = (ms / 2**16) & 0xff;
-  b[4] = (ms / 2**8)  & 0xff; b[5] = ms & 0xff;
-  b[6] = (b[6] & 0x0f) | 0x70; b[8] = (b[8] & 0x3f) | 0x80;
-  const h = b.toString('hex');
-  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
-}
-function uuidV5(name) {
-  const h = crypto.createHash('sha1').update(name).digest('hex');
-  return `${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-${((parseInt(h.slice(16,18),16)&0x3f)|0x80).toString(16)}${h.slice(18,20)}-${h.slice(20,32)}`;
-}
-function uuidV3(name) {
-  const h = crypto.createHash('md5').update(name).digest('hex');
-  return `${h.slice(0,8)}-${h.slice(8,12)}-3${h.slice(13,16)}-${((parseInt(h.slice(16,18),16)&0x3f)|0x80).toString(16)}${h.slice(18,20)}-${h.slice(20,32)}`;
-}
 const UUID_NAMESPACES = {
   DNS:  '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
   URL:  '6ba7b811-9dad-11d1-80b4-00c04fd430c8',
   OID:  '6ba7b812-9dad-11d1-80b4-00c04fd430c8',
   X500: '6ba7b814-9dad-11d1-80b4-00c04fd430c8',
 };
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Timestamp / Sortable IDs
-// ══════════════════════════════════════════════════════════════════════════════
-
-// timestampId is overridden by timeid_mod below (v7 version is better)
-function _coreTimestampId() {
-  return Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
-}
-
-function ulid() {
-  const C = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  const t = Date.now();
-  let s = '', n = t;
-  for (let i = 9; i >= 0; i--) { s = C[n % 32] + s; n = Math.floor(n / 32); }
-  s = s.padStart(10, C[0]);
-  const r = crypto.randomBytes(16);
-  let rs = '';
-  for (let i = 0; i < 16; i++) rs += C[r[i] % 32];
-  return (s + rs).slice(0, 26);
-}
 
 function ulidToTimestamp(u) {
   const C = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -129,20 +85,10 @@ function ulidToTimestamp(u) {
   return t;
 }
 
-function ksuid() {
-  const t   = Math.floor(Date.now() / 1000) - 1400000000;
-  const buf = Buffer.alloc(20);
-  buf.writeUInt32BE(t, 0);
-  crypto.randomBytes(16).copy(buf, 4);
-  return buf.toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'').slice(0, 27);
-}
 function ksuidToDate(k) {
   return new Date((Buffer.from(k + '==', 'base64').readUInt32BE(0) + 1400000000) * 1000);
 }
 
-function snowflakeId() {
-  return (BigInt(Date.now()) << 22n | BigInt(crypto.randomBytes(3).readUIntBE(0, 3))).toString();
-}
 function parseSnowflake(s) {
   const ts = Number(BigInt(s) >> 22n);
   return { timestamp: ts, date: new Date(ts) };
@@ -159,32 +105,37 @@ function convertEncoding(id) { return id; }
 function maskId(id, reveal = 4) {
   return '*'.repeat(Math.max(0, id.length - reveal)) + id.slice(-reveal);
 }
-function geoId(lat, lng) {
-  return `geo_${lat.toFixed(4)}_${lng.toFixed(4)}_${nanoId({ size: 8 })}`;
+function geoId(optsOrLat, lng) {
+  const { lat, lng: longitude } = typeof optsOrLat === 'object' ? optsOrLat : { lat: optsOrLat, lng };
+  return `geo_${lat.toFixed(4)}_${longitude.toFixed(4)}_${nanoId({ size: 8 })}`;
 }
 function parseGeoId(id) {
   const p = id.split('_');
   return p.length >= 4 ? { lat: +p[1], lng: +p[2], rand: p[3] } : null;
 }
 
-function signId(id, key) {
-  const sig = crypto.createHmac('sha256', key).update(id).digest('hex').slice(0, 16);
+function signId(optsOrId, key) {
+  const { id, key: secret } = typeof optsOrId === 'object' ? optsOrId : { id: optsOrId, key };
+  const sig = crypto.createHmac('sha256', secret).update(id).digest('hex').slice(0, 16);
   return `${id}.${sig}`;
 }
-function verifySignedId(signed, key) {
+function verifySignedId(optsOrSigned, key) {
+  const { signed, key: secret } = typeof optsOrSigned === 'object' ? optsOrSigned : { signed: optsOrSigned, key };
   const lastDot = signed.lastIndexOf('.');
   const id  = signed.slice(0, lastDot);
   const sig = signed.slice(lastDot + 1);
-  const exp = crypto.createHmac('sha256', key).update(id).digest('hex').slice(0, 16);
+  const exp = crypto.createHmac('sha256', secret).update(id).digest('hex').slice(0, 16);
   return { valid: sig === exp, id };
 }
-function encryptId(n, key) {
-  const k = crypto.createHash('sha256').update(key).digest().slice(0, 16);
+function encryptId(optsOrN, key) {
+  const { n, key: secret } = typeof optsOrN === 'object' ? optsOrN : { n: optsOrN, key };
+  const k = crypto.createHash('sha256').update(secret).digest().slice(0, 16);
   const c = crypto.createCipheriv('aes-128-ecb', k, null);
   return Buffer.concat([c.update(Buffer.from(String(n), 'utf8')), c.final()]).toString('hex');
 }
-function decryptId(hex, key) {
-  const k = crypto.createHash('sha256').update(key).digest().slice(0, 16);
+function decryptId(optsOrHex, key) {
+  const { hex, key: secret } = typeof optsOrHex === 'object' ? optsOrHex : { hex: optsOrHex, key };
+  const k = crypto.createHash('sha256').update(secret).digest().slice(0, 16);
   const c = crypto.createDecipheriv('aes-128-ecb', k, null);
   return +Buffer.concat([c.update(Buffer.from(hex, 'hex')), c.final()]).toString('utf8');
 }
@@ -274,7 +225,7 @@ const { CollisionDetector, ScalableBloomFilter, MemoryBackend,
 const { Federation, FederationNode, createFederation,
         snowflake64, parseSnowflake64 }                                     = federation_mod;
 const { scanForPII, scanBatch, verifyPseudonymization, checkDataResidency,
-        generateComplianceReport, formatReport,
+        generateComplianceReport, formatReport, verifySOC2,
         PII_PATTERNS, GDPR_ZONES, HIPAA_REGIONS }                          = compliance_mod;
 const { Dashboard, createDashboard, TimeSeriesBuffer, AlertEngine }        = dashboard_mod;
 
@@ -375,7 +326,7 @@ module.exports = {
 
   // ── v5: Compliance ───────────────────────────────────────────────────────────
   scanForPII, scanBatch, verifyPseudonymization, checkDataResidency,
-  generateComplianceReport, formatReport,
+  generateComplianceReport, formatReport, verifySOC2,
   PII_PATTERNS, GDPR_ZONES, HIPAA_REGIONS,
 
   // ── v5: Dashboard ────────────────────────────────────────────────────────────
@@ -498,6 +449,7 @@ module.exports = {
   offlineId:            advanced_mod.offlineId,
   compileTemplate:      template_mod.compileTemplate,
   recommendId:          template_mod.recommendId,
+  TEMPLATE_MARKETPLACE: template_mod.TEMPLATE_MARKETPLACE,
   
   // ── v7: Integrations ────────────────────────────────────────────────────────
   expressMiddleware:    integrations_mod.expressMiddleware,

@@ -3,31 +3,32 @@
 
 /**
  * decoder.js — Reverse ID Decoder & Global Parser
- * Uses the actual domain modules for topology and lifecycle detection
- * so format changes in those modules are automatically handled.
+ * Uses validation patterns for robust detection.
  */
 
-// ── Custom decoder registry ───────────────────────────────────────────────────
+const { PATTERNS } = require('./validation');
+
 const _customDecoders = new Map();
 
 function registerDecoder(name, { pattern, decode }) {
-  if (!name || typeof decode !== 'function')
+  if (!name || typeof decode !== 'function') {
     throw new TypeError('registerDecoder: needs name + decode function');
+  }
   _customDecoders.set(name, { pattern, decode });
 }
 
-// ── UUID ──────────────────────────────────────────────────────────────────────
-const UUID_VERSIONED = /^[0-9a-f]{8}-[0-9a-f]{4}-([1-8])[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const UUID_ANY       = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Extract UUID version
+const UUID_VERSION_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-([1-8])[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function _decodeUUID(id) {
-  const m = id.match(UUID_VERSIONED);
-  if (!m) {
-    if (UUID_ANY.test(id)) return { type: 'uuid', version: null, raw: id };
-    return null;
-  }
+  if (!PATTERNS.uuid.test(id)) return null;
+  
+  const m = id.match(UUID_VERSION_RE);
+  if (!m) return { type: 'uuid', version: null, raw: id };
+
   const version = parseInt(m[1], 16);
   const base = { type: `uuid-v${version}`, version, raw: id };
+
   if (version === 7) {
     const hex = id.replace(/-/g, '');
     const tsMs = Number(BigInt('0x' + hex.slice(0, 12)));
@@ -37,7 +38,7 @@ function _decodeUUID(id) {
   if (version === 1) {
     try {
       const hex = id.replace(/-/g, '');
-      const t   = BigInt('0x' + hex.slice(13,16) + hex.slice(8,12) + hex.slice(0,8));
+      const t = BigInt('0x' + hex.slice(13, 16) + hex.slice(8, 12) + hex.slice(0, 8));
       const tsMs = Number((t - 122192928000000000n) / 10000n);
       base.timestamp = tsMs;
       base.date = new Date(tsMs).toISOString();
@@ -46,12 +47,10 @@ function _decodeUUID(id) {
   return base;
 }
 
-// ── ULID ──────────────────────────────────────────────────────────────────────
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-const ULID_RE   = /^[0-9A-HJKMNP-TV-Z]{26}$/i;
 
 function _decodeULID(id) {
-  if (!ULID_RE.test(id)) return null;
+  if (!PATTERNS.ulid.test(id)) return null;
   const upper = id.toUpperCase();
   let ts = 0;
   for (let i = 0; i < 10; i++) {
@@ -63,11 +62,8 @@ function _decodeULID(id) {
   return { type: 'ulid', timestamp: ts, date: new Date(ts).toISOString(), random: upper.slice(10), raw: id };
 }
 
-// ── KSUID ─────────────────────────────────────────────────────────────────────
-const KSUID_RE = /^[A-Za-z0-9_-]{27}$/;
-
 function _decodeKSUID(id) {
-  if (!KSUID_RE.test(id)) return null;
+  if (!PATTERNS.ksuid.test(id)) return null;
   try {
     let b64 = id.replace(/-/g, '+').replace(/_/g, '/');
     while (b64.length % 4) b64 += '=';
@@ -79,27 +75,23 @@ function _decodeKSUID(id) {
   } catch { return null; }
 }
 
-// ── Snowflake ─────────────────────────────────────────────────────────────────
-const SNOWFLAKE_RE = /^\d{15,20}$/;
-
 function _decodeSnowflake(id) {
-  if (!SNOWFLAKE_RE.test(id)) return null;
+  if (!PATTERNS.snowflake.test(id)) return null;
   try {
-    const n  = BigInt(id);
-    const ts = Number(n >> 22n);
+    const n = BigInt(id);
+    const ts = Number((n >> 22n) + 1262304000000n);
     if (ts < 1_262_304_000_000 || ts > 4_102_444_800_000) return null;
     return {
       type: 'snowflake',
       timestamp: ts,
       date: new Date(ts).toISOString(),
       machineId: Number((n >> 12n) & 0x3FFn),
-      sequence:  Number(n & 0xFFFn),
+      sequence: Number(n & 0xFFFn),
       raw: id,
     };
   } catch { return null; }
 }
 
-// ── Topology ─────────────────────────────────────────────────────────────────
 const EU_COUNTRIES = new Set([
   'DE','IE','GB','FR','SE','NL','PL','IT','ES','BE','AT','DK',
   'FI','PT','CZ','RO','HU','SK','BG','HR','LT','LV','EE','SI','CY','LU','MT',
@@ -120,7 +112,6 @@ function _getTopologyMod() {
 }
 
 function _decodeTopo(id) {
-  // Strategy 1: use parseTopology from the actual module (handles any format)
   const topo = _getTopologyMod();
   if (topo && topo.parseTopology) {
     try {
@@ -138,7 +129,6 @@ function _decodeTopo(id) {
     } catch { /* not a topology id */ }
   }
 
-  // Strategy 2: topo_ prefix with hex-encoded region
   if (id.startsWith('topo_')) {
     const parts = id.split('_');
     if (parts.length >= 3) {
@@ -149,15 +139,12 @@ function _decodeTopo(id) {
           return { type: 'topology', country, isEU: EU_COUNTRIES.has(country), raw: id };
         }
       } catch { /* not hex */ }
-      // Even without country, flag as topology
       return { type: 'topology', country: null, isEU: false, raw: id };
     }
   }
-
   return null;
 }
 
-// ── Lifecycle ─────────────────────────────────────────────────────────────────
 let _lifecycleMod = null;
 function _getLifecycleMod() {
   if (_lifecycleMod === null) {
@@ -167,7 +154,6 @@ function _getLifecycleMod() {
 }
 
 function _decodeLifecycle(id) {
-  // Strategy 1: use parseLifecycle from the actual module
   const lc = _getLifecycleMod();
   if (lc && lc.parseLifecycle) {
     try {
@@ -178,52 +164,46 @@ function _decodeLifecycle(id) {
     } catch { /* not a lifecycle id */ }
   }
 
-  // Strategy 2: lc_ prefix fallback
   if (!id.startsWith('lc_')) return null;
   const parts = id.split('_');
   if (parts.length < 3) return null;
-  // Format: lc_{core}_{state}_{hmac}  → state is parts[parts.length-2]
   const state = parts.length >= 4 ? parts[parts.length - 2] : parts[2];
   return { type: 'lifecycle', state: state || null, raw: id };
 }
 
-// ── Simple prefix detectors ───────────────────────────────────────────────────
 function _decodeExpiring(id) {
+  if (!PATTERNS.expiring.test(id)) return null;
   const m = id.match(/^exp_(\d+)_/);
   if (!m) return null;
   const expiresAt = parseInt(m[1]);
   return { type: 'expiring', expiresAt, expiresAtDate: new Date(expiresAt).toISOString(), expired: expiresAt < Date.now(), raw: id };
 }
-function _decodeDerived(id)  { return id.startsWith('drv_') ? { type: 'derived', raw: id } : null; }
+
+function _decodeDerived(id) { return id.startsWith('drv_') ? { type: 'derived', raw: id } : null; }
 function _decodeMigrated(id) {
   if (!/^mig_v\d+_/.test(id)) return null;
   const v = id.match(/^mig_v(\d+)_/);
   return { type: 'migrated', version: v ? parseInt(v[1]) : null, raw: id };
 }
 
-// ── NanoID ────────────────────────────────────────────────────────────────────
-const NANOID_RE = /^[A-Za-z0-9_-]{7,64}$/;
 function _decodeNanoID(id) {
-  if (!NANOID_RE.test(id)) return null;
-  if (UUID_ANY.test(id) || ULID_RE.test(id) || SNOWFLAKE_RE.test(id)) return null;
+  if (!PATTERNS.nanoidAny.test(id)) return null;
+  if (PATTERNS.uuid.test(id) || PATTERNS.ulid.test(id) || PATTERNS.snowflake.test(id)) return null;
   return { type: 'nanoid', length: id.length, entropyBits: Math.floor(id.length * Math.log2(64)), raw: id };
 }
 
-// ── Prefixed ID ───────────────────────────────────────────────────────────────
-const PREFIXED_RE = /^([a-z]{2,8})[_-][A-Za-z0-9_-]{4,}$/;
 function _decodePrefixed(id) {
-  const m = id.match(PREFIXED_RE);
+  if (!PATTERNS.prefixed.test(id)) return null;
+  const m = id.match(/^([a-z]{2,8})[_-]([A-Za-z0-9_-]{4,})$/);
   if (!m) return null;
-  return { type: 'prefixed', prefix: m[1], body: id.slice(m[1].length + 1), raw: id };
+  return { type: 'prefixed', prefix: m[1], body: m[2], raw: id };
 }
 
-// ── Legacy int ────────────────────────────────────────────────────────────────
 function _decodeLegacyInt(id) {
   if (!/^\d{1,15}$/.test(id)) return null;
   return { type: 'legacy-int', value: parseInt(id), raw: id };
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
 function decodeId(id) {
   if (typeof id !== 'string' || !id) return { type: 'unknown', raw: id, error: 'not a string' };
 
@@ -268,7 +248,7 @@ function parseId(id) {
 }
 
 function decodeBatch(ids) {
-  if (!Array.isArray(ids)) throw new TypeError('decodeBatch expects an array');
+  if (!Array.isArray(ids)) throw new TypeError('decodeBatch expects an array of strings');
   return ids.map(decodeId);
 }
 

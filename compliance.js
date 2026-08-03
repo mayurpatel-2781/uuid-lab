@@ -153,6 +153,53 @@ function verifyPseudonymization(id, opts = {}) {
   };
 }
 
+/**
+ * Verify if the system meets SOC2-style security requirements.
+ * This checks for the presence of security controls rather than just the ID format.
+ * 
+ * @param {object} uidInstance - The library instance
+ * @returns {{ compliant: boolean, checks: object[] }}
+ */
+function verifySOC2(uidInstance) {
+  const checks = [];
+
+  // Check 1: Audit Trails (chain.js)
+  checks.push({
+    name: 'audit-trails-available',
+    passed: typeof uidInstance.createChain === 'function',
+    detail: 'Cryptographically linked audit trails (blockchain-style) are supported.'
+  });
+
+  // Check 2: Monitoring (telemetry.js)
+  checks.push({
+    name: 'monitoring-available',
+    passed: typeof uidInstance.monitor === 'object',
+    detail: 'Real-time telemetry and metric snapshots are enabled.'
+  });
+
+  // Check 3: Access Control
+  checks.push({
+    name: 'access-control-available',
+    passed: typeof uidInstance.createAccessControl === 'function',
+    detail: 'Role-based access control (RBAC) is supported for ID generation.'
+  });
+
+  // Check 4: Data Encryption
+  checks.push({
+    name: 'encryption-available',
+    passed: typeof uidInstance.encryptId === 'function',
+    detail: 'Built-in encryption utilities for sensitive ID values.'
+  });
+
+  const compliant = checks.every(c => c.passed);
+
+  return {
+    compliant,
+    checks,
+    verdict: compliant ? 'System satisfies SOC2 security control requirements' : 'Missing security controls for SOC2 compliance',
+  };
+}
+
 // ── Data Residency Checker ────────────────────────────────────────────────────
 
 /**

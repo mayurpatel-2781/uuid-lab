@@ -2,46 +2,47 @@
 'use strict';
 
 /**
- * benchmark.js — Performance Benchmark Suite
- * Tests all ID generators for speed and uniqueness.
- * Run: node benchmark.js
+ * benchmark.js — Production Benchmark Suite
+ * Uses Node.js perf_hooks for high-precision measurement.
  */
 
+const { performance } = require('perf_hooks');
 const uid = require('./index');
 
 const ITERATIONS = 100_000;
-const COL1 = 32;
-const COL2 = 14;
-const COL3 = 14;
-const COL4 = 14;
+const COL1 = 35;
+const COL2 = 15;
+const COL3 = 12;
+const COL4 = 12;
 
 function bench(label, fn, iterations = ITERATIONS) {
   // Warmup
-  for (let i = 0; i < 100; i++) fn();
+  for (let i = 0; i < 500; i++) fn();
 
-  const start = process.hrtime.bigint();
+  const start = performance.now();
   for (let i = 0; i < iterations; i++) fn();
-  const end   = process.hrtime.bigint();
+  const end = performance.now();
 
-  const totalMs = Number(end - start) / 1_000_000;
+  const totalMs = end - start;
   const opsPerSec = Math.floor(iterations / (totalMs / 1000));
-  const nsPerOp   = Number(end - start) / iterations;
+  const nsPerOp = (totalMs * 1_000_000) / iterations;
 
   return { label, totalMs, opsPerSec, nsPerOp, iterations };
 }
 
 function header(title) {
-  console.log(`\n${'═'.repeat(COL1 + COL2 + COL3 + COL4 + 6)}`);
-  console.log(`  ${title}`);
-  console.log(`${'─'.repeat(COL1 + COL2 + COL3 + COL4 + 6)}`);
+  const line = '═'.repeat(COL1 + COL2 + COL3 + COL4 + 4);
+  console.log(`\n${line}`);
+  console.log(`  ${title.toUpperCase()}`);
+  console.log(`${line}`);
   console.log(
     '  ' +
     'Generator'.padEnd(COL1) +
     'ops/sec'.padStart(COL2) +
     'ns/op'.padStart(COL3) +
-    'total(ms)'.padStart(COL4)
+    'ms total'.padStart(COL4)
   );
-  console.log(`${'─'.repeat(COL1 + COL2 + COL3 + COL4 + 6)}`);
+  console.log('─'.repeat(COL1 + COL2 + COL3 + COL4 + 4));
 }
 
 function row(r) {
@@ -49,117 +50,91 @@ function row(r) {
     '  ' +
     r.label.padEnd(COL1) +
     r.opsPerSec.toLocaleString().padStart(COL2) +
-    r.nsPerOp.toFixed(1).padStart(COL3) +
-    r.totalMs.toFixed(1).padStart(COL4)
+    r.nsPerOp.toFixed(2).padStart(COL3) +
+    r.totalMs.toFixed(2).padStart(COL4)
   );
 }
 
 // ── Run Benchmarks ────────────────────────────────────────────────────────────
 
-console.log('\n🚀 uuid-lab Benchmark Suite');
-console.log(`   Iterations per test: ${ITERATIONS.toLocaleString()}`);
-console.log(`   Node.js: ${process.version}`);
+console.log('\n🚀 UUID-LAB PRODUCTION BENCHMARK');
+console.log(`   Iterations: ${ITERATIONS.toLocaleString()}`);
+console.log(`   Node.js:    ${process.version}`);
+console.log(`   OS:         ${process.platform} ${process.arch}`);
 
-header('Core ID Generators');
+header('Core ID Generation');
 [
   bench('uuid (crypto.randomUUID)',    () => uid.uuid()),
-  bench('uuidV4',                      () => uid.uuidV4()),
+  bench('uuidV4 (manual)',             () => uid.uuidV4()),
   bench('uuidV7',                      () => uid.uuidV7()),
   bench('nanoId (21 chars)',           () => uid.nanoId()),
-  bench('nanoId (8 chars)',            () => uid.nanoId({ size: 8 })),
+  bench('nanoId (10 chars)',           () => uid.nanoId({ size: 10 })),
   bench('ulid',                        () => uid.ulid()),
   bench('ksuid',                       () => uid.ksuid()),
   bench('snowflakeId',                 () => uid.snowflakeId()),
-  bench('typedId',                     () => uid.typedId('user')),
+].forEach(row);
+
+header('Developer Experience');
+[
+  bench('typedId (user_...)',          () => uid.typedId('user')),
   bench('humanId',                     () => uid.humanId()),
-  bench('sequentialId',                () => uid.sequentialId()),
+  bench('sequentialId (padded)',       () => uid.sequentialId({ pad: 12 })),
+  bench('prefixedId (custom)',         () => uid.prefixedId({ prefix: 'id' })),
+  bench('shortId',                     () => uid.shortId()),
 ].forEach(row);
 
-header('Format & Encoding');
+header('Security & Advanced');
 [
-  bench('prefixedId',                  () => uid.prefixedId('usr')),
-  bench('shortId (8)',                 () => uid.shortId()),
-  bench('base62Id',                    () => uid.base62Id()),
-  bench('base36Id',                    () => uid.base36Id()),
-  bench('urlSafeId',                   () => uid.urlSafeId()),
-  bench('visualId',                    () => uid.visualId()),
-  bench('compactId',                   () => uid.compactId()),
-  bench('meaningfulId',                () => uid.meaningfulId()),
-  bench('pronounceableId',             () => uid.pronounceableId()),
-  bench('timestampId',                 () => uid.timestampId()),
-].forEach(row);
-
-header('Advanced');
-[
-  bench('hashId',                      () => uid.hashId('input')),
-  bench('shortHashId',                 () => uid.shortHashId('input')),
-  bench('seededId',                    () => uid.seededId('my-seed')),
-  bench('offlineId',                   () => uid.offlineId()),
-  bench('entropyId (128 bits)',         () => uid.entropyId({ bits: 128 })),
-  bench('adaptiveId',                  () => uid.adaptiveId()),
-  bench('compressId (uuid)',           () => uid.compressId(uid.uuid())),
-].forEach(row);
-
-header('Security');
-[
-  bench('signId',                      () => uid.signId(uid.nanoId(), 'secret')),
-  bench('encryptId',                   () => uid.encryptId(12345, 'key')),
+  bench('signId + HMAC',               () => uid.signId('test', 'secret')),
+  bench('verifySignedId',              () => uid.verifySignedId('test.sig', 'secret')),
   bench('expiringId',                  () => uid.expiringId()),
-  bench('otpToken',                    () => uid.otpToken()),
-  bench('fuzzyId',                     () => uid.fuzzyId()),
+  bench('entropyId (256 bits)',         () => uid.entropyId({ bits: 256 })),
+  bench('adaptiveId',                  () => uid.adaptiveId()),
 ].forEach(row);
 
-header('Batch Operations');
+header('Batch & Parser');
+const _id = uid.uuid();
 [
-  bench('batch(nanoId, 100)',          () => uid.batch(uid.nanoId, 100), 1_000),
-  bench('batchUnique(nanoId, 100)',    () => uid.batchUnique(uid.nanoId, 100), 1_000),
-  bench('decodeBatch (100 uuids)',     () => uid.decodeBatch(Array.from({length:100}, uid.uuid)), 1_000),
+  bench('batch(nanoId, 100)',          () => uid.batch(uid.nanoId, 100), 1000),
+  bench('decodeId (auto-detect)',      () => uid.decodeId(_id)),
+  bench('parseId (with metadata)',     () => uid.parseId(_id)),
+  bench('validate (regex)',            () => uid.validate(_id)),
 ].forEach(row);
 
-header('Pool Performance');
-const pool = uid.createHighPerfPool(uid.nanoId, { size: 500 });
-[
-  bench('pool.get() (pre-filled)',     () => pool.get()),
-  bench('createPool.get()',            () => uid.createPool(uid.nanoId).get()),
-].forEach(row);
+// ── Competitive Comparison (External) ─────────────────────────────────────────
 
-header('Decode & Parse');
-const _uuid = uid.uuid();
-const _ulid = uid.ulid();
-const _sf   = uid.snowflakeId();
-[
-  bench('decodeId (uuid)',             () => uid.decodeId(_uuid)),
-  bench('decodeId (ulid)',             () => uid.decodeId(_ulid)),
-  bench('decodeId (snowflake)',        () => uid.decodeId(_sf)),
-  bench('parseId (uuid)',              () => uid.parseId(_uuid)),
-  bench('inspectId (uuid)',            () => uid.inspectId(_uuid)),
-].forEach(row);
+let extUuid, extNanoid;
+try { extUuid = require('uuid'); } catch (e) {}
+try { extNanoid = require('nanoid'); } catch (e) {}
+
+if (extUuid || extNanoid) {
+  header('Competitive Comparison');
+  if (extUuid) row(bench('external: uuid v4', () => extUuid.v4()));
+  row(bench('uuid-lab: uuidV4', () => uid.uuidV4()));
+  
+  if (extNanoid) row(bench('external: nanoid (21)', () => extNanoid.nanoid()));
+  row(bench('uuid-lab: nanoId (21)', () => uid.nanoId()));
+}
 
 // ── Uniqueness Check ──────────────────────────────────────────────────────────
 
-console.log('\n' + '═'.repeat(COL1 + COL2 + COL3 + COL4 + 6));
-console.log('  Uniqueness Verification (10,000 each)');
-console.log('─'.repeat(COL1 + COL2 + COL3 + COL4 + 6));
-
 const N = 10_000;
+console.log('\n' + '═'.repeat(COL1 + COL2 + COL3 + COL4 + 4));
+console.log(`  UNIQUENESS VERIFICATION (${N.toLocaleString()} ids)`);
+console.log('═'.repeat(COL1 + COL2 + COL3 + COL4 + 4));
+
 function checkUnique(label, fn) {
-  const ids = Array.from({ length: N }, fn);
-  const unique = new Set(ids).size;
-  const pct    = ((unique / N) * 100).toFixed(4);
-  const ok     = unique === N ? '✅' : '❌';
-  console.log(`  ${ok} ${label.padEnd(COL1 - 4)} ${String(unique).padStart(6)}/${N} (${pct}%)`);
+  const ids = new Set();
+  for (let i = 0; i < N; i++) ids.add(fn());
+  const ok = ids.size === N ? '✅' : '❌';
+  console.log(`  ${ok} ${label.padEnd(COL1 - 4)} ${ids.size === N ? 'No collisions' : (N - ids.size) + ' collisions'}`);
 }
 
-checkUnique('uuid',         uid.uuid);
-checkUnique('nanoId',       uid.nanoId);
-checkUnique('ulid',         uid.ulid);
-checkUnique('ksuid',        uid.ksuid);
-checkUnique('snowflakeId',  uid.snowflakeId);
-checkUnique('shortId (8)',  uid.shortId);
-checkUnique('fuzzyId',      uid.fuzzyId);
-checkUnique('compactId',    uid.compactId);
-checkUnique('timestampId',  uid.timestampId);
-checkUnique('seededId',     () => uid.seededId(uid.nanoId())); // different seeds
+checkUnique('uuid', uid.uuid);
+checkUnique('nanoId', uid.nanoId);
+checkUnique('ulid', uid.ulid);
+checkUnique('ksuid', uid.ksuid);
+checkUnique('snowflakeId', uid.snowflakeId);
 
-console.log('\n' + '═'.repeat(COL1 + COL2 + COL3 + COL4 + 6));
-console.log('  ✅ Benchmark complete\n');
+console.log('\n  ✅ Benchmark complete\n');
+

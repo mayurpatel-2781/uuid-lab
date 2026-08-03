@@ -50,6 +50,33 @@ const RECOMMENDATIONS = [
   },
 ];
 
+// ── Template Marketplace ──────────────────────────────────────────────────────
+
+const TEMPLATE_MARKETPLACE = {
+  stripe: {
+    customer: 'cus_[random:14]',
+    invoice:  'in_[random:14]',
+    payment:  'pay_[random:14]',
+    subscription: 'sub_[random:14]'
+  },
+  aws: {
+    instance: 'i-[random:17]',
+    volume:   'vol-[random:17]',
+    request:  '[random:8]-[random:4]-[random:4]-[random:4]-[random:12]'
+  },
+  mongodb: {
+    objectId: '[random:24]' // Hex approximation
+  },
+  ecommerce: {
+    order: 'ORD-[date:YYYYMMDD]-[random:6]',
+    ticket: 'TKT-[random:4]-[random:4]'
+  },
+  github: {
+    run: '[random:10]',
+    token: 'ghp_[random:36]'
+  }
+};
+
 /**
  * Recommend an ID generator based on requirements.
  * @param {string[]} requirements List of features (e.g., ['sortable', 'urlSafe'])
