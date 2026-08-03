@@ -1,6 +1,6 @@
 {
   "name": "uuid-lab",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Comprehensive ID generation library — UUID, NanoID, ULID, CUID2, Snowflake, and 280+ utilities",
   "main": "index.js",
   "types": "index.d.ts",
@@ -9,15 +9,15 @@
     "uuid": "./bin/uuid-lab.js"
   },
   "exports": {
-    ".":            "./index.js",
+    ".": "./index.js",
     "./generators": "./generators.js",
     "./validation": "./validation.js",
-    "./advanced":   "./advanced.js",
+    "./advanced": "./advanced.js",
     "./enterprise": "./enterprise.js",
-    "./react":      "./react/hooks.js",
-    "./vue":        "./vue/composables.js",
-    "./server":     "./server.js",
-    "./compat":     "./compat.js"
+    "./react": "./react/hooks.js",
+    "./vue": "./vue/composables.js",
+    "./server": "./server.js",
+    "./compat": "./compat.js"
   },
   "files": [
     "index.js",
@@ -43,25 +43,47 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "test":      "node test-v3.js && node test-v4.js && node test-v5.js && node test-v6.js && node test-v7.js && node test-v8.js && node test-enterprise.js && node test-nextgen.js && node test-bleeding-edge.js",
-    "test:all":  "node test-all.js",
-    "bench":     "node benchmark.js",
-    "start":     "node server.js",
-    "prepublish":"npm test"
+    "test": "node test-v3.js && node test-v4.js && node test-v5.js && node test-v6.js && node test-v7.js && node test-v8.js && node test-enterprise.js && node test-nextgen.js && node test-bleeding-edge.js",
+    "test:all": "node test-all.js",
+    "bench": "node benchmark.js",
+    "start": "node server.js",
+    "prepublish": "npm test"
   },
   "keywords": [
-    "uuid", "nanoid", "ulid", "cuid", "cuid2", "ksuid", "snowflake",
-    "id", "identifier", "generator", "unique", "random",
-    "typescript", "react", "vue", "nextjs", "nuxt",
-    "mongodb", "postgresql", "prisma", "typeorm",
-    "collision", "entropy", "deterministic", "sha3"
+    "uuid",
+    "nanoid",
+    "ulid",
+    "cuid",
+    "cuid2",
+    "ksuid",
+    "snowflake",
+    "id",
+    "identifier",
+    "generator",
+    "unique",
+    "random",
+    "typescript",
+    "react",
+    "vue",
+    "nextjs",
+    "nuxt",
+    "mongodb",
+    "postgresql",
+    "prisma",
+    "typeorm",
+    "collision",
+    "entropy",
+    "deterministic",
+    "sha3"
   ],
   "author": "Mayur Patel <mayurpatel2781@example.com>",
   "license": "MIT",
-  "engines": { "node": ">=16.0.0" },
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "repository": {
     "type": "git",
-    "url":  "https://github.com/mayurpatel-2781/uuid-lab.git"
+    "url": "https://github.com/mayurpatel-2781/uuid-lab.git"
   },
   "bugs": {
     "url": "https://github.com/mayurpatel-2781/uuid-lab/issues"
